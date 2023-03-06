@@ -1,70 +1,65 @@
 //
-//  ViewController.swift
+//  BluetoothHandler.swift
 //  TestBluetooth
 //
 //  Created by justin on 2023/3/4.
 //
 
-import UIKit
 import CoreBluetooth
 
-class ViewController: UIViewController, CBCentralManagerDelegate {
-
-    var centralManager: CBCentralManager!
-    var peripheral: CBPeripheral!
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-
+class BluetoothHandler: NSObject {
+    var centralManager: CBCentralManager?
+    var peripheral: CBPeripheral?
+    var characteristic: CBCharacteristic?
+    
+    override init() {
+        super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
     }
-
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        if central.state == .poweredOn {
-            centralManager.scanForPeripherals(withServices: nil, options: nil)
-        } else {
-            print("Bluetooth not available.")
+    
+    func sendData(data: Data) {
+        if let peripheral = peripheral, let characteristic = characteristic {
+            peripheral.writeValue(data, for: characteristic, type: .withResponse)
         }
     }
+}
 
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        print("didDiscover peripheral: \(peripheral)")
-        self.peripheral = peripheral
-        centralManager.connect(peripheral, options: nil)
+extension BluetoothHandler: CBCentralManagerDelegate {
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        if central.state == .poweredOn {
+            central.scanForPeripherals(withServices: nil, options: nil)
+        }
     }
-
+    
+    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        if peripheral.name == "Your Peripheral Name" {
+            self.peripheral = peripheral
+            central.connect(peripheral, options: nil)
+        }
+    }
+    
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        print("Connected to \(peripheral.name ?? "Unknown Device")")
         peripheral.delegate = self
         peripheral.discoverServices(nil)
     }
 }
 
-extension ViewController: CBPeripheralDelegate {
-
+extension BluetoothHandler: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let services = peripheral.services {
             for service in services {
-                print("Service: \(service)")
+                peripheral.discoverCharacteristics(nil, for: service)
             }
         }
-        
-        if let error = error {
-            print("Unable to discover services: \(error.localizedDescription)")
-            return
-        }
     }
-
+    
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let characteristics = service.characteristics {
             for characteristic in characteristics {
-                print("Characteristic: \(characteristic)")
+                if characteristic.properties.contains(.write) {
+                    self.characteristic = characteristic
+                }
             }
-        }
-        
-        if let error = error {
-            print("Unable to discover characteristics: \(error.localizedDescription)")
-            return
         }
     }
 }
